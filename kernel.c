@@ -1,54 +1,37 @@
 #include <stdint.h>
 
 /* ===================================================================
-   TFD OS v3.0 "Foxy" — Real VGA Graphical Desktop
-   Clickable Menu + Taskbar + Mouse Cursor + Teal Wallpaper
+   TFD OS v3.0 — Graphical Desktop DEMO
+   Real VGA Pixels + Mouse + Clickable Start Menu + Working Shutdown
+   No apps, no file system — just a beautiful prototype
    By Sadman | 2026
    =================================================================== */
 
-/* ----- VESA/VGA Framebuffer ----- */
+/* ----- Framebuffer ----- */
 static uint8_t *fb;
 static int pitch, width, height;
 
-/* ----- Mouse State ----- */
-static int mouse_x = 320, mouse_y = 240;
-static int mouse_btn = 0;
+/* ----- Mouse ----- */
+static int mouse_x = 160, mouse_y = 100;
+static int mouse_btn = 0, prev_btn = 0;
 static int mouse_cycle = 0;
 static uint8_t mouse_bytes[3];
 
-/* ----- Start Menu State ----- */
+/* ----- Menu State ----- */
 static int menu_open = 0;
 
-/* ----- VGA Palette (Bright Colors) ----- */
-static const uint8_t palette[256][3] = {
-    [0] = {0x00,0x00,0x00},  /* Black */
-    [1] = {0x00,0x00,0x3F},  /* Blue */
-    [2] = {0x00,0x3F,0x00},  /* Green */
-    [3] = {0x00,0x3F,0x3F},  /* Cyan (Teal) */
-    [4] = {0x3F,0x00,0x00},  /* Red */
-    [5] = {0x3F,0x00,0x3F},  /* Magenta */
-    [6] = {0x3F,0x3F,0x00},  /* Yellow */
-    [7] = {0x3F,0x3F,0x3F},  /* White */
-    [8] = {0x1F,0x1F,0x1F},  /* Dark Gray */
-    [9] = {0x1F,0x1F,0x3F},  /* Light Blue */
-    [10]= {0x1F,0x3F,0x1F},  /* Light Green */
-    [11]= {0x1F,0x3F,0x3F},  /* Light Cyan */
-    [12]= {0x3F,0x1F,0x1F},  /* Light Red */
-    [13]= {0x3F,0x1F,0x3F},  /* Light Magenta */
-    [14]= {0x3F,0x3F,0x1F},  /* Brown */
-    [15]= {0x3F,0x3F,0x3F},  /* Bright White */
-};
-
+/* ----- Colors (Bright VGA Palette) ----- */
+#define BLACK   0
+#define BLUE    1
+#define GREEN   2
 #define TEAL    3
-#define WHITE   15
+#define RED     4
+#define YELLOW  6
 #define GRAY    7
 #define DGRAY   8
-#define YELLOW  6
-#define RED     4
-#define BLACK   0
-#define LGREEN  10
+#define WHITE   15
 
-/* ----- I/O Ports ----- */
+/* ----- I/O ----- */
 static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0,%1"::"a"(v),"Nd"(p)); }
 static inline uint8_t inb(uint16_t p) { uint8_t r; __asm__ volatile("inb %1,%0":"=a"(r):"Nd"(p)); return r; }
 static inline void iowait(void) { outb(0x80,0); }
@@ -73,34 +56,26 @@ static void vline(int x, int y, int h, uint8_t c) {
     for (int i = 0; i < h; i++) putpixel(x, y + i, c);
 }
 
-/* ----- 8x8 Font ----- */
-static const uint8_t font[95][8] = {
-    [0]={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
-    [1]={0x18,0x3C,0x3C,0x18,0x18,0x00,0x18,0x00},
-    [33]={0x38,0x6C,0xC6,0xFE,0xC6,0xC6,0xC6,0x00}, /* A */
-    [34]={0xFC,0x66,0x66,0x7C,0x66,0x66,0xFC,0x00}, /* B */
-    [35]={0x3C,0x66,0xC0,0xC0,0xC0,0x66,0x3C,0x00}, /* C */
-    [36]={0xF8,0x6C,0x66,0x66,0x66,0x6C,0xF8,0x00}, /* D */
-    [37]={0xFE,0x62,0x68,0x78,0x68,0x62,0xFE,0x00}, /* E */
-    [38]={0xFE,0x62,0x68,0x78,0x68,0x60,0xF0,0x00}, /* F */
-    [39]={0x3C,0x66,0xC0,0xDE,0xC6,0x66,0x3A,0x00}, /* G */
-    [40]={0xC6,0xC6,0xC6,0xFE,0xC6,0xC6,0xC6,0x00}, /* H */
-    [41]={0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00}, /* I */
-    [44]={0xF0,0x60,0x60,0x60,0x62,0x66,0xFE,0x00}, /* L */
-    [45]={0xC6,0xEE,0xFE,0xD6,0xC6,0xC6,0xC6,0x00}, /* M */
-    [47]={0x7C,0xC6,0xC6,0xC6,0xC6,0xC6,0x7C,0x00}, /* O */
-    [50]={0xFC,0x66,0x66,0x7C,0x6C,0x66,0xE6,0x00}, /* R */
-    [51]={0x7C,0xC6,0x60,0x38,0x0C,0xC6,0x7C,0x00}, /* S */
-    [52]={0x7E,0x5A,0x18,0x18,0x18,0x18,0x3C,0x00}, /* T */
-    [83]={0x00,0x00,0x7C,0xC0,0x7C,0x06,0xFC,0x00}, /* s */
-    [84]={0x30,0x30,0xFC,0x30,0x30,0x36,0x1C,0x00}, /* t */
-    [85]={0x00,0x00,0xC6,0xC6,0xC6,0xC6,0x76,0x00}, /* u */
-    [90]={0x00,0x00,0xFE,0x8C,0x18,0x32,0xFE,0x00}, /* z */
+/* ----- 8x8 Font (Simplified) ----- */
+static const uint8_t font_chars[26][8] = {
+    [0]  = {0x38,0x6C,0xC6,0xFE,0xC6,0xC6,0xC6,0x00}, /* A */
+    [2]  = {0x3C,0x66,0xC0,0xC0,0xC0,0x66,0x3C,0x00}, /* C */
+    [4]  = {0xFE,0x62,0x68,0x78,0x68,0x62,0xFE,0x00}, /* E */
+    [6]  = {0x3C,0x66,0xC0,0xDE,0xC6,0x66,0x3A,0x00}, /* G */
+    [8]  = {0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00}, /* I */
+    [11] = {0xF0,0x60,0x60,0x60,0x62,0x66,0xFE,0x00}, /* L */
+    [12] = {0xC6,0xEE,0xFE,0xD6,0xC6,0xC6,0xC6,0x00}, /* M */
+    [13] = {0xC6,0xE6,0xF6,0xDE,0xCE,0xC6,0xC6,0x00}, /* N */
+    [14] = {0x7C,0xC6,0xC6,0xC6,0xC6,0xC6,0x7C,0x00}, /* O */
+    [17] = {0xFC,0x66,0x66,0x7C,0x6C,0x66,0xE6,0x00}, /* R */
+    [18] = {0x7C,0xC6,0x60,0x38,0x0C,0xC6,0x7C,0x00}, /* S */
+    [19] = {0x7E,0x5A,0x18,0x18,0x18,0x18,0x3C,0x00}, /* T */
+    [20] = {0xC6,0xC6,0xC6,0xC6,0xC6,0xC6,0x7C,0x00}, /* U */
 };
 
 static void draw_char(int x, int y, char c, uint8_t fg, uint8_t bg) {
-    if (c < 32 || c > 126) return;
-    const uint8_t *g = font[c - 32];
+    if (c < 'A' || c > 'Z') return;
+    const uint8_t *g = font_chars[c - 'A'];
     for (int row = 0; row < 8; row++) {
         uint8_t bits = g[row];
         for (int col = 0; col < 8; col++) {
@@ -110,7 +85,12 @@ static void draw_char(int x, int y, char c, uint8_t fg, uint8_t bg) {
 }
 
 static void draw_string(int x, int y, const char *s, uint8_t fg, uint8_t bg) {
-    while (*s) { draw_char(x, y, *s++, fg, bg); x += 8; }
+    while (*s) {
+        if (*s == ' ') { x += 8; s++; continue; }
+        draw_char(x, y, *s, fg, bg);
+        x += 8;
+        s++;
+    }
 }
 
 /* ----- Mouse Cursor ----- */
@@ -138,107 +118,82 @@ static void cursor_restore(void) {
 }
 
 static void cursor_draw(void) {
-    /* White arrow cursor */
     static const int arrow[16][16] = {
-        {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
-        {1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0},
-        {1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0},
-        {1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0},
-        {1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0},
-        {1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0},
-        {1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0},
-        {1,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0},
-        {1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+        {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+        {1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
+        {1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0},
+        {1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0},{1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0},
+        {1,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0},{1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0},
     };
-    for (int dy = 0; dy < 16; dy++)
+    for (int dy = 0; dy < 10; dy++)
         for (int dx = 0; dx < 16; dx++)
             if (arrow[dy][dx])
                 putpixel(mouse_x + dx, mouse_y + dy, WHITE);
 }
 
-/* ----- Desktop Drawing ----- */
-static void draw_wallpaper(void) {
-    fill_rect(0, 0, width, height - 28, TEAL);
+/* ----- Desktop ----- */
+static void draw_desktop(void) {
+    fill_rect(0, 0, width, height - 24, TEAL);
+    
+    /* Terminal icon */
+    fill_rect(20, 20, 32, 32, BLACK);
+    fill_rect(24, 24, 24, 24, GRAY);
+    draw_string(14, 56, "TERMINAL", WHITE, TEAL);
+    
+    /* Shutdown icon */
+    fill_rect(20, 100, 32, 32, BLACK);
+    fill_rect(24, 104, 24, 24, RED);
+    draw_string(12, 136, "SHUTDOWN", WHITE, TEAL);
 }
 
 static void draw_taskbar(void) {
-    fill_rect(0, height - 28, width, 28, GRAY);
-    hline(0, height - 28, width, WHITE);
+    fill_rect(0, height - 24, width, 24, GRAY);
+    hline(0, height - 24, width, WHITE);
     
     /* Start button */
-    fill_rect(4, height - 24, 56, 20, GRAY);
-    hline(4, height - 24, 56, WHITE);
-    vline(4, height - 24, 20, WHITE);
-    hline(4, height - 5, 56, DGRAY);
-    vline(60, height - 24, 20, DGRAY);
-    draw_string(10, height - 20, "Start", BLACK, GRAY);
+    fill_rect(2, height - 22, 50, 20, GRAY);
+    hline(2, height - 22, 50, WHITE);
+    vline(2, height - 22, 20, WHITE);
+    hline(2, height - 3, 50, DGRAY);
+    vline(52, height - 22, 20, DGRAY);
+    draw_string(8, height - 18, "START", BLACK, GRAY);
     
     /* Clock */
-    draw_string(width - 60, height - 20, "12:00", BLACK, GRAY);
+    draw_string(width - 50, height - 18, "12:00", BLACK, GRAY);
 }
 
-static void draw_desktop_icons(void) {
-    /* Terminal icon */
-    fill_rect(30, 30, 32, 32, BLACK);
-    fill_rect(34, 34, 24, 24, GRAY);
-    hline(34, 34, 24, WHITE);
-    vline(34, 34, 24, WHITE);
-    draw_string(26, 66, "Terminal", WHITE, TEAL);
+static void draw_menu(void) {
+    int mx = 2, my = height - 24 - 60;
+    fill_rect(mx, my, 100, 60, GRAY);
+    hline(mx, my, 100, WHITE);
+    vline(mx, my, 60, WHITE);
+    hline(mx, my + 59, 100, DGRAY);
+    vline(mx + 99, my, 60, DGRAY);
     
-    /* Notepad icon */
-    fill_rect(30, 110, 32, 32, BLACK);
-    fill_rect(34, 114, 24, 24, WHITE);
-    hline(34, 114, 24, YELLOW);
-    hline(34, 122, 24, YELLOW);
-    hline(34, 130, 24, YELLOW);
-    draw_string(28, 146, "Notepad", WHITE, TEAL);
-    
-    /* Games icon */
-    fill_rect(30, 190, 32, 32, BLACK);
-    fill_rect(34, 194, 24, 24, RED);
-    draw_string(30, 226, "Games", WHITE, TEAL);
+    draw_string(mx + 8, my + 8, "TERMINAL", BLACK, GRAY);
+    draw_string(mx + 8, my + 28, "SHUTDOWN", RED, GRAY);
 }
 
-static void draw_start_menu(void) {
-    int mx = 4, my = height - 28 - 120;
-    fill_rect(mx, my, 140, 120, GRAY);
-    hline(mx, my, 140, WHITE);
-    vline(mx, my, 120, WHITE);
-    hline(mx, my + 119, 140, DGRAY);
-    vline(mx + 139, my, 120, DGRAY);
-    
-    draw_string(mx + 8, my + 10, "Terminal", BLACK, GRAY);
-    draw_string(mx + 8, my + 34, "Notepad", BLACK, GRAY);
-    draw_string(mx + 8, my + 58, "Games", BLACK, GRAY);
-    draw_string(mx + 8, my + 82, "Shutdown", RED, GRAY);
+/* ----- Mouse Handling ----- */
+static int in_rect(int mx, int my, int x, int y, int w, int h) {
+    return (mx >= x && mx < x + w && my >= y && my < y + h);
 }
 
-/* ----- Mouse Polling ----- */
 static void mouse_poll(void) {
-    static int cycle = 0;
-    static uint8_t bytes[3];
-    
     if (!(inb(0x64) & 0x20)) return;
     uint8_t d = inb(0x60);
     
-    if (cycle == 0) {
-        if (d & 0x08) { bytes[0] = d; cycle = 1; }
+    if (mouse_cycle == 0) {
+        if (d & 0x08) { mouse_bytes[0] = d; mouse_cycle = 1; }
     } else {
-        bytes[cycle++] = d;
-        if (cycle == 3) {
-            cycle = 0;
-            int dx = bytes[1], dy = bytes[2];
-            if (bytes[0] & 0x10) dx |= ~0xFF;
-            if (bytes[0] & 0x20) dy |= ~0xFF;
+        mouse_bytes[mouse_cycle++] = d;
+        if (mouse_cycle == 3) {
+            mouse_cycle = 0;
+            int dx = mouse_bytes[1], dy = mouse_bytes[2];
+            if (mouse_bytes[0] & 0x10) dx |= ~0xFF;
+            if (mouse_bytes[0] & 0x20) dy |= ~0xFF;
             dy = -dy;
-            mouse_btn = bytes[0] & 0x07;
+            mouse_btn = mouse_bytes[0] & 0x07;
             mouse_x += dx / 2;
             mouse_y += dy / 2;
             if (mouse_x < 0) mouse_x = 0;
@@ -249,52 +204,44 @@ static void mouse_poll(void) {
     }
 }
 
-/* ----- Click Detection ----- */
-static int in_rect(int mx, int my, int x, int y, int w, int h) {
-    return (mx >= x && mx < x + w && my >= y && my < y + h);
-}
-
-static void handle_clicks(void) {
-    static int prev_btn = 0;
+static void check_clicks(void) {
     int clicked = (prev_btn == 0 && mouse_btn != 0);
     prev_btn = mouse_btn;
-    
     if (!clicked) return;
     
     /* Start button */
-    if (in_rect(mouse_x, mouse_y, 4, height - 24, 56, 20)) {
+    if (in_rect(mouse_x, mouse_y, 2, height - 22, 50, 20)) {
         menu_open = !menu_open;
     }
     
-    /* Start menu items */
+    /* Menu - Shutdown */
     if (menu_open) {
-        int mx = 4, my = height - 28 - 120;
-        if (in_rect(mouse_x, mouse_y, mx + 8, my + 10, 124, 20)) {
-            menu_open = 0;
-        }
-        if (in_rect(mouse_x, mouse_y, mx + 8, my + 58, 124, 20)) {
-            menu_open = 0;
-        }
-        if (in_rect(mouse_x, mouse_y, mx + 8, my + 82, 124, 20)) {
-            menu_open = 0;
-            /* Shutdown - just halt for now */
-            while (1) __asm__ volatile("hlt");
+        int mx = 2, my = height - 24 - 60;
+        if (in_rect(mouse_x, mouse_y, mx + 8, my + 28, 84, 16)) {
+            /* REAL SHUTDOWN */
+            for (int i = 0; i < width * height; i++) fb[i] = BLACK;
+            draw_string(width/2 - 40, height/2, "SHUTTING DOWN...", RED, BLACK);
+            for (volatile int d = 0; d < 500000; d++);
+            outb(0x64, 0xFE);
+            outb(0x604, 0x2000);
+            outb(0xB004, 0x2000);
+            __asm__ volatile("cli; hlt");
         }
     }
     
-    /* Desktop icons */
-    if (in_rect(mouse_x, mouse_y, 30, 30, 32, 50)) {
-        menu_open = 0;
-    }
-    if (in_rect(mouse_x, mouse_y, 30, 110, 32, 50)) {
-        menu_open = 0;
-    }
-    if (in_rect(mouse_x, mouse_y, 30, 190, 32, 50)) {
-        menu_open = 0;
+    /* Desktop Shutdown icon */
+    if (in_rect(mouse_x, mouse_y, 20, 100, 32, 32)) {
+        for (int i = 0; i < width * height; i++) fb[i] = BLACK;
+        draw_string(width/2 - 40, height/2, "SHUTTING DOWN...", RED, BLACK);
+        for (volatile int d = 0; d < 500000; d++);
+        outb(0x64, 0xFE);
+        outb(0x604, 0x2000);
+        outb(0xB004, 0x2000);
+        __asm__ volatile("cli; hlt");
     }
 }
 
-/* ----- VGA Mode 13h Fallback ----- */
+/* ----- VGA Fallback ----- */
 static void set_vga_mode13(void) {
     outb(0x3C2, 0x63);
     outb(0x3D4, 0x00); outb(0x3D5, 0x5F);
@@ -307,12 +254,6 @@ static void set_vga_mode13(void) {
     outb(0x3D4, 0x07); outb(0x3D5, 0x00);
     outb(0x3D4, 0x08); outb(0x3D5, 0x00);
     outb(0x3D4, 0x09); outb(0x3D5, 0x41);
-    outb(0x3D4, 0x0A); outb(0x3D5, 0x00);
-    outb(0x3D4, 0x0B); outb(0x3D5, 0x00);
-    outb(0x3D4, 0x0C); outb(0x3D5, 0x00);
-    outb(0x3D4, 0x0D); outb(0x3D5, 0x00);
-    outb(0x3D4, 0x0E); outb(0x3D5, 0x00);
-    outb(0x3D4, 0x0F); outb(0x3D5, 0x00);
     outb(0x3D4, 0x10); outb(0x3D5, 0x9C);
     outb(0x3D4, 0x11); outb(0x3D5, 0x8E);
     outb(0x3D4, 0x12); outb(0x3D5, 0x8F);
@@ -324,17 +265,9 @@ static void set_vga_mode13(void) {
     outb(0x3C4, 0x00); outb(0x3C5, 0x03);
     outb(0x3C4, 0x01); outb(0x3C5, 0x01);
     outb(0x3C4, 0x02); outb(0x3C5, 0x0F);
-    outb(0x3C4, 0x03); outb(0x3C5, 0x00);
     outb(0x3C4, 0x04); outb(0x3C5, 0x0E);
-    outb(0x3CE, 0x00); outb(0x3CF, 0x00);
-    outb(0x3CE, 0x01); outb(0x3CF, 0x00);
-    outb(0x3CE, 0x02); outb(0x3CF, 0x00);
-    outb(0x3CE, 0x03); outb(0x3CF, 0x00);
-    outb(0x3CE, 0x04); outb(0x3CF, 0x00);
     outb(0x3CE, 0x05); outb(0x3CF, 0x40);
     outb(0x3CE, 0x06); outb(0x3CF, 0x05);
-    outb(0x3CE, 0x07); outb(0x3CF, 0x0F);
-    outb(0x3CE, 0x08); outb(0x3CF, 0xFF);
     inb(0x3DA);
     outb(0x3C0, 0x30); outb(0x3C0, 0x41);
     outb(0x3C0, 0x33); outb(0x3C0, 0x00);
@@ -345,64 +278,50 @@ static void set_vga_mode13(void) {
 
 static void set_palette(void) {
     outb(0x3C8, 0);
+    static const uint8_t pal[16][3] = {
+        {0x00,0x00,0x00},{0x00,0x00,0x3F},{0x00,0x3F,0x00},{0x00,0x3F,0x3F},
+        {0x3F,0x00,0x00},{0x3F,0x00,0x3F},{0x3F,0x3F,0x00},{0x3F,0x3F,0x3F},
+        {0x1F,0x1F,0x1F},{0x1F,0x1F,0x3F},{0x1F,0x3F,0x1F},{0x1F,0x3F,0x3F},
+        {0x3F,0x1F,0x1F},{0x3F,0x1F,0x3F},{0x3F,0x3F,0x1F},{0x3F,0x3F,0x3F},
+    };
     for (int i = 0; i < 16; i++) {
-        outb(0x3C9, palette[i][0]);
-        outb(0x3C9, palette[i][1]);
-        outb(0x3C9, palette[i][2]);
+        outb(0x3C9, pal[i][0]); outb(0x3C9, pal[i][1]); outb(0x3C9, pal[i][2]);
     }
     for (int i = 16; i < 256; i++) {
-        outb(0x3C9, i & 0x3F);
-        outb(0x3C9, (i >> 2) & 0x3F);
-        outb(0x3C9, 63 - (i & 0x3F));
+        outb(0x3C9, i & 0x3F); outb(0x3C9, (i>>2)&0x3F); outb(0x3C9, 63-(i&0x3F));
     }
 }
 
-/* ----- Mouse Init ----- */
-static void mouse_init(void) {
+/* ----- Main ----- */
+void kernel_main(uint32_t magic, uint32_t addr) {
+    uint32_t *mbi = (uint32_t *)addr;
+    fb = 0;
+
+    if ((*mbi & (1<<11)) && *(mbi+22)) {
+        fb = (uint8_t*)(uint32_t)*(mbi+22);
+        pitch = *(mbi+24); width = *(mbi+25); height = *(mbi+26);
+        if (!width || !height) fb = 0;
+    }
+    if (!fb) set_vga_mode13();
+    set_palette();
+
+    /* Init mouse */
     outb(0x64, 0xA8);
     for (volatile int i = 0; i < 10000; i++);
     outb(0x64, 0xD4); outb(0x60, 0xFF);
     for (volatile int i = 0; i < 10000; i++);
     while (inb(0x64) & 1) inb(0x60);
     outb(0x64, 0xD4); outb(0x60, 0xF4);
-}
 
-/* ----- Main ----- */
-void kernel_main(uint32_t magic, uint32_t addr) {
-    uint32_t *mbi = (uint32_t *)addr;
-    uint32_t flags = *mbi;
-    fb = 0;
-
-    /* Try VESA */
-    if ((flags & (1 << 11)) && *(mbi + 22) != 0) {
-        fb = (uint8_t *)(uint32_t)*(mbi + 22);
-        pitch = *(mbi + 24);
-        width = *(mbi + 25);
-        height = *(mbi + 26);
-        if (width == 0 || height == 0) fb = 0;
-    }
-
-    /* Fallback */
-    if (!fb) set_vga_mode13();
-
-    set_palette();
-    mouse_init();
-
-    /* Main GUI loop */
     while (1) {
         cursor_restore();
-        
-        draw_wallpaper();
-        draw_desktop_icons();
+        draw_desktop();
         draw_taskbar();
-        if (menu_open) draw_start_menu();
-        
+        if (menu_open) draw_menu();
         mouse_poll();
-        handle_clicks();
-        
+        check_clicks();
         cursor_save();
         cursor_draw();
-        
-        for (volatile int d = 0; d < 10000; d++);
+        for (volatile int d = 0; d < 8000; d++);
     }
 }
