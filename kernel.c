@@ -41,78 +41,42 @@ static void fr(int x,int y,int w,int h,uint8_t c){for(int dy=0;dy<h;dy++)for(int
 static void hl(int x,int y,int w,uint8_t c){for(int i=0;i<w;i++)pp(x+i,y,c);}
 static void vl(int x,int y,int h,uint8_t c){for(int i=0;i<h;i++)pp(x,y+i,c);}
 
-/* ============ PC SPEAKER SOUND ============ */
+/* ============ SOUND ENGINE ============ */
 static void beep(int freq,int dur){
     if(freq==0)return;
     uint16_t div=1193180/freq;
-    outb(0x43,0xB6);
-    outb(0x42,div&0xFF);
-    outb(0x42,(div>>8)&0xFF);
+    outb(0x43,0xB6);outb(0x42,div&0xFF);outb(0x42,(div>>8)&0xFF);
     outb(0x61,inb(0x61)|3);
     for(volatile int d=0;d<dur*10000;d++)__asm__ volatile("nop");
     outb(0x61,inb(0x61)&~3);
 }
-static void tada(void){
-    beep(523,30);   /* C */
-    beep(659,30);   /* E */
-    beep(784,50);   /* G */
-    beep(1047,80);  /* High C */
-}
-/* ============ TEXT ENGINE (Correct Orientation) ============ */
+static void tada(void){beep(523,30);beep(659,30);beep(784,50);beep(1047,80);}
+
+/* ============ TEXT ENGINE ============ */
 static void draw_char(int x,int y,char ch,uint8_t fg){
-    /* 5x7 pixel font — columns stored vertically, correct orientation */
     static const uint8_t font[26][5]={
-        {0x7C,0x12,0x11,0x12,0x7C}, /* A */
-        {0x7F,0x49,0x49,0x49,0x36}, /* B */
-        {0x3E,0x41,0x41,0x41,0x22}, /* C */
-        {0x7F,0x41,0x41,0x22,0x1C}, /* D */
-        {0x7F,0x49,0x49,0x49,0x41}, /* E */
-        {0x7F,0x48,0x48,0x48,0x40}, /* F */
-        {0x3E,0x41,0x49,0x49,0x3A}, /* G */
-        {0x7F,0x08,0x08,0x08,0x7F}, /* H */
-        {0x00,0x41,0x7F,0x41,0x00}, /* I */
-        {0x02,0x01,0x41,0x7E,0x40}, /* J */
-        {0x7F,0x08,0x14,0x22,0x41}, /* K */
-        {0x7F,0x01,0x01,0x01,0x01}, /* L */
-        {0x7F,0x20,0x18,0x20,0x7F}, /* M */
-        {0x7F,0x10,0x08,0x04,0x7F}, /* N */
-        {0x3E,0x41,0x41,0x41,0x3E}, /* O */
-        {0x7F,0x48,0x48,0x48,0x30}, /* P */
-        {0x3E,0x41,0x45,0x42,0x3D}, /* Q */
-        {0x7F,0x48,0x4C,0x4A,0x31}, /* R */
-        {0x32,0x49,0x49,0x49,0x26}, /* S */
-        {0x40,0x40,0x7F,0x40,0x40}, /* T */
-        {0x7E,0x01,0x01,0x01,0x7E}, /* U */
-        {0x7C,0x02,0x01,0x02,0x7C}, /* V */
-        {0x7F,0x02,0x0C,0x02,0x7F}, /* W */
-        {0x63,0x14,0x08,0x14,0x63}, /* X */
-        {0x70,0x08,0x07,0x08,0x70}, /* Y */
-        {0x43,0x45,0x49,0x51,0x61}, /* Z */
+        {0x7C,0x12,0x11,0x12,0x7C},{0x7F,0x49,0x49,0x49,0x36},
+        {0x3E,0x41,0x41,0x41,0x22},{0x7F,0x41,0x41,0x22,0x1C},
+        {0x7F,0x49,0x49,0x49,0x41},{0x7F,0x48,0x48,0x48,0x40},
+        {0x3E,0x41,0x49,0x49,0x3A},{0x7F,0x08,0x08,0x08,0x7F},
+        {0x00,0x41,0x7F,0x41,0x00},{0x02,0x01,0x41,0x7E,0x40},
+        {0x7F,0x08,0x14,0x22,0x41},{0x7F,0x01,0x01,0x01,0x01},
+        {0x7F,0x20,0x18,0x20,0x7F},{0x7F,0x10,0x08,0x04,0x7F},
+        {0x3E,0x41,0x41,0x41,0x3E},{0x7F,0x48,0x48,0x48,0x30},
+        {0x3E,0x41,0x45,0x42,0x3D},{0x7F,0x48,0x4C,0x4A,0x31},
+        {0x32,0x49,0x49,0x49,0x26},{0x40,0x40,0x7F,0x40,0x40},
+        {0x7E,0x01,0x01,0x01,0x7E},{0x7C,0x02,0x01,0x02,0x7C},
+        {0x7F,0x02,0x0C,0x02,0x7F},{0x63,0x14,0x08,0x14,0x63},
+        {0x70,0x08,0x07,0x08,0x70},{0x43,0x45,0x49,0x51,0x61},
     };
     if(ch>='a'&&ch<='z')ch-=32;
     if(ch<'A'||ch>'Z')return;
     const uint8_t*g=font[ch-'A'];
-    for(int c=0;c<5;c++){
-        uint8_t col=g[c];
-        for(int r=0;r<7;r++){
-            if(col&(0x01<<r))pp(x+c,y+r,fg);
-        }
-    }
+    for(int r=0;r<7;r++)for(int c=0;c<5;c++)if(g[c]&(0x01<<r))pp(x+c,y+r,fg);
 }
-static void draw_text(int x,int y,const char*s,uint8_t fg){
-    while(*s){
-        if(*s==' '){x+=6;s++;continue;}
-        draw_char(x,y,*s,fg);
-        x+=6;s++;
-    }
-}
-    if(ch>='a'&&ch<='z')ch-=32;if(ch<'A'||ch>'Z')return;
-    const uint8_t*g=font[ch-'A'];
-    for(int r=0;r<5;r++){uint8_t b=g[r];for(int c=0;c<7;c++){if(b&(0x40>>c))pp(x+c,y+r,fg);}}
-}
-static void draw_text(int x,int y,const char*s,uint8_t fg){while(*s){if(*s==' '){x+=8;s++;continue;}draw_char(x,y,*s,fg);x+=8;s++;}}
+static void draw_text(int x,int y,const char*s,uint8_t fg){while(*s){if(*s==' '){x+=6;s++;continue;}draw_char(x,y,*s,fg);x+=6;s++;}}
 
-/* ============ CURSOR (Fixed - no trails) ============ */
+/* ============ CURSOR ============ */
 static void cs(void){for(int dy=0;dy<12;dy++)for(int dx=0;dx<20;dx++){int px=mx+dx,py=my+dy;if(px>=0&&px<320&&py>=0&&py<200)csave[dy][dx]=fb[py*320+px];}cdrawn=1;}
 static void cr(void){if(!cdrawn)return;for(int dy=0;dy<12;dy++)for(int dx=0;dx<20;dx++){int px=mx+dx,py=my+dy;if(px>=0&&px<320&&py>=0&&py<200)fb[py*320+px]=csave[dy][dx];}cdrawn=0;}
 static void cd(void){cs();static const int s[12][20]={{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0},{1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0},{0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};for(int dy=0;dy<12;dy++)for(int dx=0;dx<20;dx++)if(s[dy][dx])pp(mx+dx,my+dy,BLACK);}
@@ -126,7 +90,7 @@ static void draw_wp(void){
 }
 
 /* ============ ICON ============ */
-static void draw_icon(void){fr(10,30,32,32,BLACK);fr(14,34,24,24,WHITE);hl(14,34,24,BLUE);draw_text(8,70,"ABOUT",RED);}
+static void draw_icon(void){fr(10,30,32,32,BLACK);fr(14,34,24,24,WHITE);hl(14,34,24,BLUE);draw_text(8,70,"ABOUT",WHITE);}
 
 /* ============ TASKBAR ============ */
 static void draw_tb(void){
