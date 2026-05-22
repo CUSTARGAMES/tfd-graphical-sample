@@ -1,8 +1,8 @@
 #include <stdint.h>
 
 /* ===================================================================
-   TFD OS v3.0 "Foxy" — VGA Mode 13h Graphical Desktop
-   320×200 Real Pixels — Skyblue + White Taskbar + Mouse
+   TFD OS v3.0 "Foxy" — VGA Mode 13h Desktop
+   Skyblue + White Taskbar + Start Menu + Working Mouse
    By Sadman | 2026
    =================================================================== */
 
@@ -15,6 +15,9 @@ static int mbtn = 0, pbtn = 0;
 static int mcycle = 0;
 static uint8_t mbytes[3];
 
+/* Menu */
+static int menu_open = 0;
+
 /* Colors */
 #define BLACK   0x00
 #define SKYBLUE 0x03
@@ -22,12 +25,13 @@ static uint8_t mbytes[3];
 #define GRAY    0x07
 #define WHITE   0x0F
 #define DGRAY   0x08
+#define GREEN   0x02
 
 /* I/O */
 static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0,%1"::"a"(v),"Nd"(p)); }
 static inline uint8_t inb(uint16_t p) { uint8_t r; __asm__ volatile("inb %1,%0":"=a"(r):"Nd"(p)); return r; }
 
-/* Pixel Drawing */
+/* Pixel */
 static void pp(int x, int y, uint8_t c) {
     if (x >= 0 && x < width && y >= 0 && y < height) fb[y * pitch + x] = c;
 }
@@ -43,13 +47,14 @@ static void vl(int x, int y, int h, uint8_t c) {
     for (int i = 0; i < h; i++) pp(x, y + i, c);
 }
 
-/* 8x8 Font */
+/* Font */
 static void dchar(int x, int y, char c, uint8_t fg, uint8_t bg) {
     static const uint8_t glyphs[26][8] = {
         [0]={0x38,0x6C,0xC6,0xFE,0xC6,0xC6,0xC6,0x00},
         [3]={0xF8,0x6C,0x66,0x66,0x66,0x6C,0xF8,0x00},
         [4]={0xFE,0x62,0x68,0x78,0x68,0x62,0xFE,0x00},
         [7]={0xC6,0xC6,0xC6,0xFE,0xC6,0xC6,0xC6,0x00},
+        [12]={0xC6,0xEE,0xFE,0xD6,0xC6,0xC6,0xC6,0x00},
         [13]={0xC6,0xE6,0xF6,0xDE,0xCE,0xC6,0xC6,0x00},
         [14]={0x7C,0xC6,0xC6,0xC6,0xC6,0xC6,0x7C,0x00},
         [17]={0xFC,0x66,0x66,0x7C,0x6C,0x66,0xE6,0x00},
@@ -109,22 +114,38 @@ static void cdraw(void) {
 }
 
 /* Desktop */
-static void draw_desktop(void) {
+static void draw_wallpaper(void) {
     fr(0, 0, 320, 176, SKYBLUE);
 }
 static void draw_taskbar(void) {
-    fr(0, 176, 320, 24, WHITE);
-    hl(0, 176, 320, GRAY);
+    int ty = 176;
+    fr(0, ty, 320, 24, WHITE);
+    hl(0, ty, 320, GRAY);
     
-    /* Shutdown button in taskbar */
-    int bx = 230, by = 180;
-    fr(bx, by, 80, 16, RED);
-    hl(bx, by, 80, WHITE);
-    hl(bx, by + 15, 80, DGRAY);
-    dstr(bx + 8, by + 2, "SHUTDOWN", WHITE, RED);
+    /* Start button */
+    int sx = 4, sy = ty + 4;
+    fr(sx, sy, 50, 16, GRAY);
+    hl(sx, sy, 50, WHITE);
+    vl(sx, sy, 16, WHITE);
+    hl(sx, sy + 15, 50, DGRAY);
+    vl(sx + 49, sy, 16, DGRAY);
+    dstr(sx + 6, sy + 2, "START", BLACK, GRAY);
+}
+static void draw_menu(void) {
+    int sx = 4, sy = 176 - 44;
+    fr(sx, sy, 100, 44, WHITE);
+    hl(sx, sy, 100, GRAY);
+    vl(sx, sy, 44, GRAY);
+    hl(sx, sy + 43, 100, DGRAY);
+    vl(sx + 99, sy, 44, DGRAY);
+    
+    /* Shutdown option */
+    dstr(sx + 8, sy + 8, "SHUTDOWN", RED, WHITE);
+    /* Restart option */
+    dstr(sx + 8, sy + 24, "RESTART", BLACK, WHITE);
 }
 
-/* Mouse */
+/* Mouse handling */
 static int inr(int mx, int my, int x, int y, int w, int h) {
     return (mx >= x && mx < x + w && my >= y && my < y + h);
 }
@@ -149,13 +170,32 @@ static void clicks(void) {
     pbtn = mbtn;
     if (!clk) return;
     
-    /* Shutdown button */
-    if (inr(mx, my, 230, 180, 80, 16)) {
+    /* Start button */
+    if (inr(mx, my, 4, 180, 50, 16)) {
+        menu_open = !menu_open;
+        return;
+    }
+    
+    /* Menu - Shutdown */
+    if (menu_open && inr(mx, my, 12, 176 - 44 + 8, 84, 16)) {
         fr(0, 0, 320, 200, BLACK);
         dstr(120, 90, "SHUTDOWN", RED, BLACK);
         for (volatile int d = 0; d < 500000; d++);
         outb(0x64, 0xFE);
         while (1) __asm__ volatile("hlt");
+    }
+    
+    /* Menu - Restart */
+    if (menu_open && inr(mx, my, 12, 176 - 44 + 24, 84, 16)) {
+        fr(0, 0, 320, 200, BLACK);
+        dstr(120, 90, "RESTART", GREEN, BLACK);
+        for (volatile int d = 0; d < 500000; d++);
+        outb(0x64, 0xFE);
+    }
+    
+    /* Click outside menu closes it */
+    if (menu_open && !inr(mx, my, 4, 176 - 44, 100, 44)) {
+        menu_open = 0;
     }
 }
 
@@ -218,12 +258,13 @@ void kernel_main(uint32_t magic, uint32_t addr) {
     
     while (1) {
         crest();
-        draw_desktop();
+        draw_wallpaper();
         draw_taskbar();
+        if (menu_open) draw_menu();
         mpoll();
         clicks();
         csave();
         cdraw();
-        for (volatile int d = 0; d < 5000; d++);
+        for (volatile int d = 0; d < 4000; d++);
     }
 }
