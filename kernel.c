@@ -72,7 +72,7 @@ static void draw_char(int x,int y,char ch,uint8_t fg){
     if(ch>='a'&&ch<='z')ch-=32;
     if(ch<'A'||ch>'Z')return;
     const uint8_t*g=font[ch-'A'];
-    for(int r=0;r<7;r++)for(int c=0;c<5;c++)if(g[c]&(0x01<<r))pp(x+c,y+r,fg);
+    for(int r=0;r<7;r++)for(int c=0;c<5;c++)if(g[c]&(0x40>>r))pp(x+c,y+r,fg);
 }
 static void draw_text(int x,int y,const char*s,uint8_t fg){while(*s){if(*s==' '){x+=6;s++;continue;}draw_char(x,y,*s,fg);x+=6;s++;}}
 
