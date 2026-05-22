@@ -43,14 +43,24 @@ static void vl(int x,int y,int h,uint8_t c){for(int i=0;i<h;i++)pp(x,y+i,c);}
 
 /* ============ PC SPEAKER SOUND ============ */
 static void beep(int freq,int dur){
-    if(freq==0)return;uint16_t div=1193180/freq;
-    outb(0x43,0xB6);outb(0x42,div&0xFF);outb(0x42,(div>>8)&0xFF);
-    outb(0x61,inb(0x61)|3);for(volatile int d=0;d<dur*500;d++);outb(0x61,inb(0x61)&~3);
+    if(freq==0)return;
+    uint16_t div=1193180/freq;
+    outb(0x43,0xB6);
+    outb(0x42,div&0xFF);
+    outb(0x42,(div>>8)&0xFF);
+    outb(0x61,inb(0x61)|3);
+    for(volatile int d=0;d<dur*10000;d++)__asm__ volatile("nop");
+    outb(0x61,inb(0x61)&~3);
 }
-static void tada(void){beep(523,150);beep(659,150);beep(784,300);beep(1047,400);}
-
-/* ============ TEXT ENGINE (Fixed) ============ */
+static void tada(void){
+    beep(523,30);   /* C */
+    beep(659,30);   /* E */
+    beep(784,50);   /* G */
+    beep(1047,80);  /* High C */
+}
+/* ============ TEXT ENGINE (Correct Orientation) ============ */
 static void draw_char(int x,int y,char ch,uint8_t fg){
+    /* 5x7 pixel font — columns stored vertically, correct orientation */
     static const uint8_t font[26][5]={
         {0x7C,0x12,0x11,0x12,0x7C}, /* A */
         {0x7F,0x49,0x49,0x49,0x36}, /* B */
@@ -79,6 +89,23 @@ static void draw_char(int x,int y,char ch,uint8_t fg){
         {0x70,0x08,0x07,0x08,0x70}, /* Y */
         {0x43,0x45,0x49,0x51,0x61}, /* Z */
     };
+    if(ch>='a'&&ch<='z')ch-=32;
+    if(ch<'A'||ch>'Z')return;
+    const uint8_t*g=font[ch-'A'];
+    for(int c=0;c<5;c++){
+        uint8_t col=g[c];
+        for(int r=0;r<7;r++){
+            if(col&(0x01<<r))pp(x+c,y+r,fg);
+        }
+    }
+}
+static void draw_text(int x,int y,const char*s,uint8_t fg){
+    while(*s){
+        if(*s==' '){x+=6;s++;continue;}
+        draw_char(x,y,*s,fg);
+        x+=6;s++;
+    }
+}
     if(ch>='a'&&ch<='z')ch-=32;if(ch<'A'||ch>'Z')return;
     const uint8_t*g=font[ch-'A'];
     for(int r=0;r<5;r++){uint8_t b=g[r];for(int c=0;c<7;c++){if(b&(0x40>>c))pp(x+c,y+r,fg);}}
@@ -99,7 +126,7 @@ static void draw_wp(void){
 }
 
 /* ============ ICON ============ */
-static void draw_icon(void){fr(10,30,32,32,BLACK);fr(14,34,24,24,WHITE);hl(14,34,24,BLUE);draw_text(8,70,"ABOUT",WHITE);}
+static void draw_icon(void){fr(10,30,32,32,BLACK);fr(14,34,24,24,WHITE);hl(14,34,24,BLUE);draw_text(8,70,"ABOUT",RED);}
 
 /* ============ TASKBAR ============ */
 static void draw_tb(void){
