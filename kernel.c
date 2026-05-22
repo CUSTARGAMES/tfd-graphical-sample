@@ -163,46 +163,66 @@ static void draw_browser(void){
     draw_text(bx+10,by+100,"LUCKY",GRAY);
 }
 
-/* ============ SNAKE GAME ============ */
+/* ============ SNAKE GAME (Fixed - No text-mode functions) ============ */
 static void snake_init(void){
     snl=3;sdir=0;ssc=0;sgo=0;
     sx[0]=8;sy[0]=8;sx[1]=7;sy[1]=8;sx[2]=6;sy[2]=8;
     sfx=12;sfy=8;
-    cls();
-    for(int x=0;x<16;x++){pp(x*20,0,BLACK);pp(x*20,199,BLACK);}
-    for(int y=0;y<16;y++){pp(0,y*20,BLACK);pp(319,y*20,BLACK);}
+    fr(0,0,320,200,BLACK);
+    for(int x=0;x<16;x++){pp(x*20,0,GREEN);pp(x*20,199,GREEN);}
+    for(int y=0;y<16;y++){pp(0,y*20,GREEN);pp(319,y*20,GREEN);}
     snake_on=1;
 }
+
 static void snake_update(void){
     if(!snake_on||sgo)return;
-    stick++;if(stick<8)return;stick=0;
-    if(hask()){char c=getk();if(c=='w'||c=='W')sdir=3;else if(c=='s'||c=='S')sdir=1;else if(c=='a'||c=='A')sdir=2;else if(c=='d'||c=='D')sdir=0;else if(c=='q'||c=='Q'){snake_on=0;return;}}
+    stick++;if(stick<6)return;stick=0;
+    
+    /* Check keyboard using raw I/O */
+    if(inb(0x64)&1){
+        uint8_t sc=inb(0x60);
+        char c=0;
+        switch(sc){
+            case 0x11:c='w';break;  /* W */
+            case 0x1F:c='s';break;  /* S */
+            case 0x1E:c='a';break;  /* A */
+            case 0x20:c='d';break;  /* D */
+            case 0x10:c='q';break;  /* Q */
+        }
+        if(c=='w')sdir=3;
+        else if(c=='s')sdir=1;
+        else if(c=='a')sdir=2;
+        else if(c=='d')sdir=0;
+        else if(c=='q'){snake_on=0;return;}
+    }
+    
     int nx=sx[0],ny=sy[0];
     if(sdir==0)nx++;else if(sdir==1)ny++;else if(sdir==2)nx--;else ny--;
     if(nx<0||nx>=16||ny<0||ny>=16){sgo=1;return;}
     for(int i=0;i<snl;i++)if(sx[i]==nx&&sy[i]==ny){sgo=1;return;}
-    pp(sx[snl-1]*20+2,sy[snl-1]*20+2,BLACK);pp(sx[snl-1]*20+18,sy[snl-1]*20+18,BLACK);
+    
+    /* Erase tail */
+    fr(sx[snl-1]*20+2,sy[snl-1]*20+2,16,16,BLACK);
+    /* Move body */
     for(int i=snl-1;i>0;i--){sx[i]=sx[i-1];sy[i]=sy[i-1];}
     sx[0]=nx;sy[0]=ny;
+    /* Draw snake */
     for(int i=0;i<snl;i++){fr(sx[i]*20+2,sy[i]*20+2,16,16,i==0?LGREEN:GREEN);}
-    if(sx[0]==sfx&&sy[0]==sfy){snl++;ssc+=10;sx[snl-1]=sx[snl-2];sy[snl-1]=sy[snl-2];
-        sfx=((inb(0x40)*123)%16);sfy=((inb(0x40)*789)%16);}
+    /* Check food */
+    if(sx[0]==sfx&&sy[0]==sfy){
+        snl++;ssc+=10;
+        sx[snl-1]=sx[snl-2];sy[snl-1]=sy[snl-2];
+        sfx=((inb(0x40)*123)%16);sfy=((inb(0x40)*789)%16);
+    }
+    /* Draw food */
     fr(sfx*20+4,sfy*20+4,12,12,RED);
-    if(sgo){draw_text(100,90,"GAME OVER",RED);draw_text(80,110,"Q TO QUIT",WHITE);}
-}
-
-/* ============ MOUSE ============ */
-static int inr(int mx,int my,int x,int y,int w,int h){return(mx>=x&&mx<x+w&&my>=y&&my<y+h);}
-static void mpoll(void){
-    while(inb(0x64)&1){uint8_t st=inb(0x64),d=inb(0x60);if(!(st&0x20))continue;
-        if(mcycle==0){if(d&0x08){mbytes[0]=d;mcycle=1;}}
-        else{mbytes[mcycle++]=d;if(mcycle==3){mcycle=0;
-            int dx=mbytes[1],dy=mbytes[2];if(mbytes[0]&0x10)dx|=~0xFF;if(mbytes[0]&0x20)dy|=~0xFF;dy=-dy;mbtn=mbytes[0]&0x07;
-            if(dx!=0||dy!=0){cr();mx+=dx/2;my+=dy/2;if(mx<0)mx=0;if(my<0)my=0;if(mx>=300)mx=300;if(my>=188)my=188;cd();}
-        }}
+    /* Game over */
+    if(sgo){
+        fr(80,80,160,60,BLACK);
+        draw_text(100,85,"GAME OVER",RED);
+        draw_text(80,110,"Q TO QUIT",WHITE);
     }
 }
-
 /* ============ REDRAW ============ */
 static void redraw(void){draw_wp();draw_icons();draw_tb();draw_win();draw_browser();if(menu)draw_menu();cd();}
 
