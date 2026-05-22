@@ -2,6 +2,19 @@
 
 static uint8_t *fb;
 
+/* Forward declarations */
+static void mpoll(void);
+static void redraw(void);
+static void draw_wp(void);
+static void draw_icons(void);
+static void draw_tb(void);
+static void draw_win(void);
+static void draw_browser(void);
+static void draw_menu(void);
+static void cd(void);
+static void cr(void);
+static void snake_update(void);
+
 /* Mouse */
 static int mx=160,my=100,mbtn=0,pbtn=0,mcycle=0;
 static uint8_t mbytes[3];
@@ -10,7 +23,7 @@ static int cdrawn=0;
 
 /* Windows */
 static int wx=50,wy=40,ww=220,wh=120,drag=0,dox=0,doy=0,win_open=0;
-static int bx=60,by=50,bw=200,bh=140,bopen=0;  /* Browser window */
+static int bx=60,by=50,bw=200,bh=140,bopen=0;
 
 /* Menu + Animation */
 static int menu=0,menu_anim=0,menu_dir=0;
@@ -59,32 +72,19 @@ static void tada(void){beep(523,25);beep(659,25);beep(784,40);beep(1047,60);}
 /* ============ 8x8 FONT ============ */
 static void draw_char(int x,int y,char ch,uint8_t fg){
     static const uint8_t font[26][8]={
-        {0x18,0x24,0x42,0x7E,0x42,0x42,0x42,0x00},
-        {0x7C,0x42,0x42,0x7C,0x42,0x42,0x7C,0x00},
-        {0x3C,0x42,0x40,0x40,0x40,0x42,0x3C,0x00},
-        {0x78,0x44,0x42,0x42,0x42,0x44,0x78,0x00},
-        {0x7E,0x40,0x40,0x7C,0x40,0x40,0x7E,0x00},
-        {0x7E,0x40,0x40,0x7C,0x40,0x40,0x40,0x00},
-        {0x3C,0x42,0x40,0x4E,0x42,0x42,0x3C,0x00},
-        {0x42,0x42,0x42,0x7E,0x42,0x42,0x42,0x00},
-        {0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00},
-        {0x0E,0x04,0x04,0x04,0x44,0x44,0x38,0x00},
-        {0x42,0x44,0x48,0x70,0x48,0x44,0x42,0x00},
-        {0x40,0x40,0x40,0x40,0x40,0x40,0x7E,0x00},
-        {0x42,0x66,0x5A,0x42,0x42,0x42,0x42,0x00},
-        {0x42,0x62,0x52,0x4A,0x46,0x42,0x42,0x00},
-        {0x3C,0x42,0x42,0x42,0x42,0x42,0x3C,0x00},
-        {0x7C,0x42,0x42,0x7C,0x40,0x40,0x40,0x00},
-        {0x3C,0x42,0x42,0x42,0x4A,0x44,0x3A,0x00},
-        {0x7C,0x42,0x42,0x7C,0x48,0x44,0x42,0x00},
-        {0x3C,0x42,0x40,0x3C,0x02,0x42,0x3C,0x00},
-        {0x7E,0x18,0x18,0x18,0x18,0x18,0x18,0x00},
-        {0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00},
-        {0x42,0x42,0x42,0x42,0x24,0x24,0x18,0x00},
-        {0x42,0x42,0x42,0x5A,0x5A,0x66,0x42,0x00},
-        {0x42,0x24,0x18,0x18,0x18,0x24,0x42,0x00},
-        {0x42,0x24,0x18,0x18,0x18,0x18,0x18,0x00},
-        {0x7E,0x02,0x04,0x18,0x20,0x40,0x7E,0x00},
+        {0x18,0x24,0x42,0x7E,0x42,0x42,0x42,0x00},{0x7C,0x42,0x42,0x7C,0x42,0x42,0x7C,0x00},
+        {0x3C,0x42,0x40,0x40,0x40,0x42,0x3C,0x00},{0x78,0x44,0x42,0x42,0x42,0x44,0x78,0x00},
+        {0x7E,0x40,0x40,0x7C,0x40,0x40,0x7E,0x00},{0x7E,0x40,0x40,0x7C,0x40,0x40,0x40,0x00},
+        {0x3C,0x42,0x40,0x4E,0x42,0x42,0x3C,0x00},{0x42,0x42,0x42,0x7E,0x42,0x42,0x42,0x00},
+        {0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00},{0x0E,0x04,0x04,0x04,0x44,0x44,0x38,0x00},
+        {0x42,0x44,0x48,0x70,0x48,0x44,0x42,0x00},{0x40,0x40,0x40,0x40,0x40,0x40,0x7E,0x00},
+        {0x42,0x66,0x5A,0x42,0x42,0x42,0x42,0x00},{0x42,0x62,0x52,0x4A,0x46,0x42,0x42,0x00},
+        {0x3C,0x42,0x42,0x42,0x42,0x42,0x3C,0x00},{0x7C,0x42,0x42,0x7C,0x40,0x40,0x40,0x00},
+        {0x3C,0x42,0x42,0x42,0x4A,0x44,0x3A,0x00},{0x7C,0x42,0x42,0x7C,0x48,0x44,0x42,0x00},
+        {0x3C,0x42,0x40,0x3C,0x02,0x42,0x3C,0x00},{0x7E,0x18,0x18,0x18,0x18,0x18,0x18,0x00},
+        {0x42,0x42,0x42,0x42,0x42,0x42,0x3C,0x00},{0x42,0x42,0x42,0x42,0x24,0x24,0x18,0x00},
+        {0x42,0x42,0x42,0x5A,0x5A,0x66,0x42,0x00},{0x42,0x24,0x18,0x18,0x18,0x24,0x42,0x00},
+        {0x42,0x24,0x18,0x18,0x18,0x18,0x18,0x00},{0x7E,0x02,0x04,0x18,0x20,0x40,0x7E,0x00},
     };
     if(ch>='a'&&ch<='z')ch-=32;if(ch<'A'||ch>'Z')return;
     const uint8_t*g=font[ch-'A'];
@@ -107,9 +107,7 @@ static void draw_wp(void){
 
 /* ============ ICONS ============ */
 static void draw_icons(void){
-    /* About icon */
     fr(10,30,32,32,BLACK);fr(14,34,24,24,WHITE);hl(14,34,24,BLUE);draw_text(8,66,"ABOUT",WHITE);
-    /* Browser icon */
     fr(10,100,32,32,BLACK);fr(14,104,24,24,WHITE);
     fr(16,106,20,4,GREEN);fr(16,112,20,4,GREEN);fr(16,118,20,4,GREEN);
     draw_text(5,136,"BROWSER",WHITE);
@@ -154,7 +152,6 @@ static void draw_browser(void){
     int cx=bx+bw-18,cy=by+2;fr(cx,cy,14,12,GRAY);
     hl(cx,cy,14,WHITE);vl(cx,cy,12,WHITE);hl(cx,cy+11,14,DGRAY);vl(cx+13,cy,12,DGRAY);
     draw_text(cx+4,cy+2,"X",BLACK);
-    /* Fake Google page */
     fr(bx+30,by+30,140,20,WHITE);hl(bx+30,by+30,140,BLACK);hl(bx+30,by+49,140,BLACK);vl(bx+30,by+30,20,BLACK);vl(bx+169,by+30,20,BLACK);
     draw_text(bx+35,by+33,"GOOGLE",BLUE);
     draw_text(bx+10,by+65,"RETRO SEARCH",BLACK);
@@ -163,7 +160,7 @@ static void draw_browser(void){
     draw_text(bx+10,by+100,"LUCKY",GRAY);
 }
 
-/* ============ SNAKE GAME (Fixed - No text-mode functions) ============ */
+/* ============ SNAKE GAME ============ */
 static void snake_init(void){
     snl=3;sdir=0;ssc=0;sgo=0;
     sx[0]=8;sy[0]=8;sx[1]=7;sy[1]=8;sx[2]=6;sy[2]=8;
@@ -173,56 +170,33 @@ static void snake_init(void){
     for(int y=0;y<16;y++){pp(0,y*20,GREEN);pp(319,y*20,GREEN);}
     snake_on=1;
 }
-
 static void snake_update(void){
     if(!snake_on||sgo)return;
     stick++;if(stick<6)return;stick=0;
-    
-    /* Check keyboard using raw I/O */
-    if(inb(0x64)&1){
-        uint8_t sc=inb(0x60);
-        char c=0;
-        switch(sc){
-            case 0x11:c='w';break;  /* W */
-            case 0x1F:c='s';break;  /* S */
-            case 0x1E:c='a';break;  /* A */
-            case 0x20:c='d';break;  /* D */
-            case 0x10:c='q';break;  /* Q */
-        }
-        if(c=='w')sdir=3;
-        else if(c=='s')sdir=1;
-        else if(c=='a')sdir=2;
-        else if(c=='d')sdir=0;
-        else if(c=='q'){snake_on=0;return;}
-    }
-    
-    int nx=sx[0],ny=sy[0];
-    if(sdir==0)nx++;else if(sdir==1)ny++;else if(sdir==2)nx--;else ny--;
-    if(nx<0||nx>=16||ny<0||ny>=16){sgo=1;return;}
-    for(int i=0;i<snl;i++)if(sx[i]==nx&&sy[i]==ny){sgo=1;return;}
-    
-    /* Erase tail */
-    fr(sx[snl-1]*20+2,sy[snl-1]*20+2,16,16,BLACK);
-    /* Move body */
-    for(int i=snl-1;i>0;i--){sx[i]=sx[i-1];sy[i]=sy[i-1];}
-    sx[0]=nx;sy[0]=ny;
-    /* Draw snake */
+    if(inb(0x64)&1){uint8_t sc=inb(0x60);char c=0;
+        switch(sc){case 0x11:c='w';break;case 0x1F:c='s';break;case 0x1E:c='a';break;case 0x20:c='d';break;case 0x10:c='q';break;}
+        if(c=='w')sdir=3;else if(c=='s')sdir=1;else if(c=='a')sdir=2;else if(c=='d')sdir=0;else if(c=='q'){snake_on=0;return;}}
+    int nx=sx[0],ny=sy[0];if(sdir==0)nx++;else if(sdir==1)ny++;else if(sdir==2)nx--;else ny--;
+    if(nx<0||nx>=16||ny<0||ny>=16){sgo=1;return;}for(int i=0;i<snl;i++)if(sx[i]==nx&&sy[i]==ny){sgo=1;return;}
+    fr(sx[snl-1]*20+2,sy[snl-1]*20+2,16,16,BLACK);for(int i=snl-1;i>0;i--){sx[i]=sx[i-1];sy[i]=sy[i-1];}sx[0]=nx;sy[0]=ny;
     for(int i=0;i<snl;i++){fr(sx[i]*20+2,sy[i]*20+2,16,16,i==0?LGREEN:GREEN);}
-    /* Check food */
-    if(sx[0]==sfx&&sy[0]==sfy){
-        snl++;ssc+=10;
-        sx[snl-1]=sx[snl-2];sy[snl-1]=sy[snl-2];
-        sfx=((inb(0x40)*123)%16);sfy=((inb(0x40)*789)%16);
-    }
-    /* Draw food */
+    if(sx[0]==sfx&&sy[0]==sfy){snl++;ssc+=10;sx[snl-1]=sx[snl-2];sy[snl-1]=sy[snl-2];sfx=((inb(0x40)*123)%16);sfy=((inb(0x40)*789)%16);}
     fr(sfx*20+4,sfy*20+4,12,12,RED);
-    /* Game over */
-    if(sgo){
-        fr(80,80,160,60,BLACK);
-        draw_text(100,85,"GAME OVER",RED);
-        draw_text(80,110,"Q TO QUIT",WHITE);
+    if(sgo){fr(80,80,160,60,BLACK);draw_text(100,85,"GAME OVER",RED);draw_text(80,110,"Q TO QUIT",WHITE);}
+}
+
+/* ============ MOUSE ============ */
+static int inr(int mx,int my,int x,int y,int w,int h){return(mx>=x&&mx<x+w&&my>=y&&my<y+h);}
+static void mpoll(void){
+    while(inb(0x64)&1){uint8_t st=inb(0x64),d=inb(0x60);if(!(st&0x20))continue;
+        if(mcycle==0){if(d&0x08){mbytes[0]=d;mcycle=1;}}
+        else{mbytes[mcycle++]=d;if(mcycle==3){mcycle=0;
+            int dx=mbytes[1],dy=mbytes[2];if(mbytes[0]&0x10)dx|=~0xFF;if(mbytes[0]&0x20)dy|=~0xFF;dy=-dy;mbtn=mbytes[0]&0x07;
+            if(dx!=0||dy!=0){cr();mx+=dx/2;my+=dy/2;if(mx<0)mx=0;if(my<0)my=0;if(mx>=300)mx=300;if(my>=188)my=188;cd();}
+        }}
     }
 }
+
 /* ============ REDRAW ============ */
 static void redraw(void){draw_wp();draw_icons();draw_tb();draw_win();draw_browser();if(menu)draw_menu();cd();}
 
@@ -249,13 +223,11 @@ void kernel_main(uint32_t magic,uint32_t addr){
             if(inr(mx,my,4,180,56,16)){if(!menu){menu=1;menu_dir=1;menu_anim=0;}else{menu_dir=0;}}
             if(menu&&menu_anim==10){int sy=176-4-50;
                 if(inr(mx,my,8,sy+4,102,16)){fr(0,0,320,200,BLACK);for(volatile int d=0;d<500000;d++);outb(0x64,0xFE);while(1)__asm__ volatile("hlt");}
-                if(inr(mx,my,8,sy+44,102,16)){cr();snake_init();cd();}
-            }
+                if(inr(mx,my,8,sy+44,102,16)){cr();snake_init();cd();}}
             if(win_open&&inr(mx,my,wx+ww-18,wy+2,14,12)){cr();win_open=0;redraw();}
             if(!win_open&&inr(mx,my,10,30,32,32)){cr();win_open=1;redraw();}
             if(bopen&&inr(mx,my,bx+bw-18,by+2,14,12)){cr();bopen=0;redraw();}
-            if(!bopen&&inr(mx,my,10,100,32,32)){cr();bopen=1;redraw();}
-        }
+            if(!bopen&&inr(mx,my,10,100,32,32)){cr();bopen=1;redraw();}}
         if(mbtn&1){if(drag){cr();if(win_open&&inr(mx-dox,my-doy,wx,wy,ww,16)){wx=mx-dox;wy=my-doy;}if(bopen&&inr(mx-dox,my-doy,bx,by,bw,16)){bx=mx-dox;by=my-doy;}redraw();}else if(click){if(win_open&&inr(mx,my,wx,wy,ww,16)&&!inr(mx,my,wx+ww-18,wy,14,12)){drag=1;dox=mx-wx;doy=my-wy;}if(bopen&&inr(mx,my,bx,by,bw,16)&&!inr(mx,my,bx+bw-18,by,14,12)){drag=1;dox=mx-bx;doy=my-by;}}}else{drag=0;}
         for(volatile int d=0;d<1500;d++);
     }
